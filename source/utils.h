@@ -14,6 +14,7 @@
 namespace slicer {
 	static double EarthRadius = 6371.21;
 	struct XYPoint {
+		XYPoint () = default;
 		XYPoint (int aX, int aY)
 				:x{ aX }, y{ aY } {
 		}
@@ -21,6 +22,7 @@ namespace slicer {
 	};
 
 	struct GeoPoint {
+		GeoPoint () = default;
 		GeoPoint (float aLon, float aLat, bool aRadian = false)
 				:lon{ aLon }, lat{ aLat }, isRadian{ aRadian } {
 		}
@@ -86,7 +88,20 @@ namespace slicer {
 		return res;
 	}
 
-	static double findMean (std::vector<double>) {
+	static double findMean (std::vector<double> a) {
+		double sum = 0;
+		for (auto el : a) {
+			sum += el;
+		}
+		return sum / a.size();
+	}
 
+	static double findMedian (std::vector<double> a) {
+		std::sort(a.begin(), a.end());
+		if (a.size() % 2 != 0) {
+			return a[a.size() / 2];
+		} else {
+			return (a[(a.size() - 1) / 2] + a[a.size() / 2]) / 2.0;
+		}
 	}
 } // slicer namespace

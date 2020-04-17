@@ -46,7 +46,7 @@ namespace slicer {
 		void read (const std::string& aFilePath);
 		GeoPoint xyToGeo (const XYPoint& aPoint) const;
 		XYPoint geoToXY (const GeoPoint& aPoint) const;
-		float getCelsius(const int brightness) const;
+		double getCelsius(const int brightness) const;
 		uint16_t getBrightness (const XYPoint& aPoint) const;
 
 		int8_t getFFh1 () const {

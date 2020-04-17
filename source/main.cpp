@@ -7,57 +7,91 @@
 #include "utils.h"
 #include "tests.h"
 
+using namespace slicer;
+
+argparse::ArgumentParser argumentParser;
+
 std::vector<slicer::XYPoint> xyPoints;
 std::vector<slicer::GeoPoint> geoPoints;
 
 bool geoFlag = false;
 bool testFlag = false;
 
+int median_count = -1;
+int mean_count = -1;
+
+struct SlicePoint {
+//	SlicePoint (GeoPoint aGeo, XYPoint aXY, double aBright, double aMean, double aMedian, double aDist, double aTemp)
+//			:geo(aGeo),
+//			 xy(aXY),
+//			 brightness(aBright),
+//			 mean(aMean),
+//			 median(aMedian),
+//			 distance(aDist),
+//			 temperature(aTemp) {
+//	}
+	GeoPoint geo;
+	XYPoint xy;
+	double brightness, mean = -1, median = -1, distance, temperature;
+};
+
 bool parse_args (int argc, char* argv[]) {
 	assert(argc != 1 && "ERROR: invalid argument count!");
 
-	argparse::ArgumentParser argument_parser("slicer");
+	argumentParser = argparse::ArgumentParser("slicer");
 
-	argument_parser.add_argument("--test")
+	argumentParser.add_argument("--test")
 			.help("Run simple tests")
 			.default_value(false)
 			.implicit_value(true);
 
-	argument_parser.add_argument("-o", "--out")
+	argumentParser.add_argument("-o", "--out")
 			.help("Path to the output file without an extension")
 			.required();
 
-	argument_parser.add_argument("-i", "--in")
+	argumentParser.add_argument("-i", "--in")
 			.help("Path to the input file with an 'pro' extension")
 			.required();
 
-	argument_parser.add_argument("-g", "--geo")
+	argumentParser.add_argument("-g", "--geo")
 			.help("Informs the application that coordinates will be provided in geographic format except of cartesian")
 			.default_value(false)
 			.implicit_value(true);
 
-	argument_parser.add_argument("coordinates")
+	argumentParser.add_argument("coordinates")
 			.help("Coordinates of start and finish point in cartesian or geographic reference system")
 			.required()
-			.remaining()
+			.nargs(4)
 			.action([] (const std::string& value) { return std::stof(value); });
 
+	argumentParser.add_argument("--mean")
+			.help("Set number of points for a perpendicular for mean calculation")
+			.default_value(false)
+			.implicit_value(true)
+			.action([] (const std::string& value) { return std::stoi(value); });
+
+	argumentParser.add_argument("--median")
+			.help("Set number of points for a perpendicular for median calculation")
+			.default_value(false)
+			.implicit_value(true)
+			.action([] (const std::string& value) { return std::stoi(value); });
+
 	try {
-		argument_parser.parse_args(argc, argv);
+		argumentParser.parse_args(argc, argv);
 	}
 	catch (const std::runtime_error& err) {
 		std::cout << err.what() << std::endl;
-		std::cout << argument_parser;
+		std::cout << argumentParser;
 		exit(0);
 	}
 
-	testFlag = argument_parser["--test"] == true;
+	testFlag = argumentParser["--test"] == true;
 	if (testFlag) {
 		return true;
 	}
 
-	geoFlag = argument_parser["--geo"] == true;
-	auto points = argument_parser.get<std::vector<float>>("coordinates");
+	geoFlag = argumentParser["--geo"] == true;
+	auto points = argumentParser.get<std::vector<float>>("coordinates");
 	if (points.size() % 2 == 0) {
 		assert(points.size() % 2 == 0 && "ERROR: invalid number of coordinates!");
 		return false;
@@ -72,10 +106,13 @@ bool parse_args (int argc, char* argv[]) {
 		}
 	}
 
+	mean_count = argumentParser.get<int>("--mean");
+	median_count = argumentParser.get<int>("--median");
+
 	return true;
 }
 
-std::vector<double> getPerpendicularBrightness (const slicer::ProReader reader, const int n, slicer::GeoPoint aPoint,
+std::vector<double> getPerpendicularBrightness (const slicer::ProReader& reader, const int n, slicer::GeoPoint aPoint,
 		double dlon, double dlat) {
 	std::vector<double> result;
 
@@ -115,6 +152,8 @@ int main (int argc, char* argv[]) {
 		return 0;
 	}
 
+	std::vector<SlicePoint> result;
+
 	std::vector<slicer::XYPoint> intermediate_points;
 
 	if (geoFlag) {
@@ -130,14 +169,34 @@ int main (int argc, char* argv[]) {
 		intermediate_points = xyPoints;
 	}
 
+	const auto firstGeo = reader.xyToGeo(intermediate_points[0]),
+			lastGeo = reader.xyToGeo(intermediate_points[intermediate_points.size()]);
 	for (auto& point : intermediate_points) {
+		SlicePoint data;
+		data.xy = point;
+		data.geo = reader.xyToGeo(point);
+		data.brightness = reader.getBrightness(point);
+		data.temperature = reader.getCelsius(data.brightness);
+		data.distance = getGeoDistance(data.geo, firstGeo);
+		if (argumentParser["--mean"] == true) {
+			auto dlon = (lastGeo.lon - firstGeo.lon) / mean_count,
+					dlat = (lastGeo.lat - firstGeo.lat) / mean_count;
+			data.mean = findMean(getPerpendicularBrightness(reader, mean_count, data.geo, dlon, dlat));
+		}
+
+		if (argumentParser["--median"] == true) {
+			auto dlon = (lastGeo.lon - firstGeo.lon) / mean_count,
+					dlat = (lastGeo.lat - firstGeo.lat) / mean_count;
+			data.mean = findMedian(getPerpendicularBrightness(reader, median_count, data.geo, dlon, dlat));
+		}
+
 		if (geoFlag) {
 			auto tmp = reader.xyToGeo(point);
-			std::cout << "lon: " << tmp.lon << ", lat: " << tmp.lat << std::endl;
+			//std::cout << "lon: " << tmp.lon << ", lat: " << tmp.lat << std::endl;
 		} else {
-			std::cout << "x: " << point.x << ", y: " << point.y << std::endl;
+			//std::cout << "x: " << point.x << ", y: " << point.y << std::endl;
 		}
-		std::cout << reader.getBrightness(point) << std::endl;
+//		std::cout << reader.getBrightness(point) << std::endl;
 	}
 
 	return 0;

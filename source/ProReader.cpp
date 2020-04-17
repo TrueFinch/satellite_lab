@@ -114,7 +114,7 @@ uint16_t ProReader::getBrightness (const XYPoint& aPoint) const {
 	return pixelsBrightness[aPoint.x + getPixelsCount() * (getLinesCount() - aPoint.y - 1)];
 }
 
-float ProReader::getCelsius (const int brightness) const {
+double ProReader::getCelsius (const int brightness) const {
 	return m_pass.coefficientA * brightness + m_pass.coefficientB;
 }
 
