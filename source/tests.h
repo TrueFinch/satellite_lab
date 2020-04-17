@@ -10,8 +10,8 @@
 namespace tests {
 
 	struct Test {
-		slicer::PointXY xy_data;
-		slicer::PointGeo geo_expected;
+		slicer::XYPoint xy_data;
+		slicer::GeoPoint geo_expected;
 	};
 
 	void run_tests (slicer::ProReader& reader) {

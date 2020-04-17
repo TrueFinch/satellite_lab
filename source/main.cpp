@@ -7,21 +7,21 @@
 #include "utils.h"
 #include "tests.h"
 
-slicer::PointGeo geo{ -1, -1 };
-slicer::PointXY xy{ -1, -1 };
-
-std::vector<slicer::PointGeo> geoPoints;
-std::vector<slicer::PointXY> xyPoints;
+std::vector<slicer::XYPoint> xyPoints;
+std::vector<slicer::GeoPoint> geoPoints;
 
 bool geoFlag = false;
-bool xyFlag = false;
 bool testFlag = false;
-bool graphFlag = false;
 
-void parse_args (int argc, char* argv[]) {
-	assert(argc != 1 && "ERROR: invalid argument count");
+bool parse_args (int argc, char* argv[]) {
+	assert(argc != 1 && "ERROR: invalid argument count!");
 
 	argparse::ArgumentParser argument_parser("slicer");
+
+	argument_parser.add_argument("--test")
+			.help("Run simple tests")
+			.default_value(false)
+			.implicit_value(true);
 
 	argument_parser.add_argument("-o", "--out")
 			.help("Path to the output file without an extension")
@@ -39,7 +39,8 @@ void parse_args (int argc, char* argv[]) {
 	argument_parser.add_argument("coordinates")
 			.help("Coordinates of start and finish point in cartesian or geographic reference system")
 			.required()
-			.nargs(4);
+			.remaining()
+			.action([] (const std::string& value) { return std::stof(value); });
 
 	try {
 		argument_parser.parse_args(argc, argv);
@@ -49,34 +50,70 @@ void parse_args (int argc, char* argv[]) {
 		std::cout << argument_parser;
 		exit(0);
 	}
+
+
+	testFlag = argument_parser["--test"] == true;
+	if (testFlag) {
+		return true;
+	}
+
+	geoFlag = argument_parser["--geo"] == true;
+	auto points = argument_parser.get<std::vector<float>>("coordinates");
+	if (points.size() % 2 == 0) {
+		assert(points.size() % 2 == 0 && "ERROR: invalid number of coordinates!");
+		return false;
+	}
+	if (geoFlag) {
+		for (auto i = 0; i < points.size(); i += 2) {
+			geoPoints.emplace_back(points[i], points[i + 1]);
+		}
+	} else {
+		for (auto i = 0; i < points.size(); i += 2) {
+			xyPoints.emplace_back(static_cast<int>(points[i]), static_cast<int>(points[i + 1]));
+		}
+	}
+
+	return true;
 }
 
 // -geo lon lat -xy x y -test
 int main (int argc, char* argv[]) {
-	parse_args(argc, argv);
+	if (!parse_args(argc, argv)) {
+		return 0;
+	}
 
 	slicer::ProReader reader;
 	std::string path = std::string(argv[1]);
 	reader.read(path);
 
-	if (graphFlag) {
-		auto points = getPoints(xyPoints[0], xyPoints[1]);
-		for (auto& point : points) {
-			std::cout << /*point.x << "," << point.y << "," <<*/ reader.getBrightness(point) << std::endl;
-		}
-	}
-	else if (testFlag) {
+	if (testFlag) {
 		tests::run_tests(reader);
+		return 0;
 	}
-	else if (geoFlag) {
-		auto xy_point = reader.geoToXY(geo);
-		std::cout << "x: " << xy_point.x << ", y: " << xy_point.y << std::endl;
-		std::cout << "Brightness: " << reader.getBrightness(xy_point);
+
+	std::vector<slicer::XYPoint> intermediate_points;
+
+	if (geoFlag) {
+		for (auto& point : geoPoints) {
+			xyPoints.emplace_back(reader.geoToXY(point));
+		}
+		geoPoints.clear();
 	}
-	else if (xyFlag) {
-		auto geo_point = reader.xyToGeo(xy);
-		std::cout << "lon: " << geo_point.lon << ", lat: " << geo_point.lat << std::endl;
-		std::cout << "Brightness: " << reader.getBrightness(xy);
+
+	if (xyPoints.size() > 1) {
+		intermediate_points = slicer::getPoints(intermediate_points[0], intermediate_points[1]);
+	} else {
+		intermediate_points = xyPoints;
+	}
+
+	for (auto& point : intermediate_points) {
+		if (geoFlag) {
+			auto tmp = reader.xyToGeo(point);
+			std::cout << "lon: " << tmp.lon << ", lat: " << tmp.lat << std::endl;
+		} else {
+			std::cout << "x: " << point.x << ", y: " << point.y << std::endl;
+		}
+		std::cout << reader.getBrightness(point) << std::endl;
 	}
 
 	return 0;

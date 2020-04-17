@@ -48,8 +48,10 @@ void ProReader::readPassport () {
 	m_input.read(reinterpret_cast<char*>(&m_pass.longitudeSize), sizeof(m_pass.longitudeSize));
 	m_input.read(reinterpret_cast<char*>(&m_pass.latitudeStep), sizeof(m_pass.latitudeStep));
 	m_input.read(reinterpret_cast<char*>(&m_pass.longitudeStep), sizeof(m_pass.longitudeStep));
+	m_input.read(reinterpret_cast<char*>(&m_pass.coefficientA), sizeof(m_pass.coefficientA));
+	m_input.read(reinterpret_cast<char*>(&m_pass.coefficientB), sizeof(m_pass.coefficientB));
 
-	m_input.ignore(410);
+	m_input.ignore(394);
 }
 
 void ProReader::readImageData () {
@@ -64,48 +66,32 @@ void ProReader::readImageData () {
 	}
 }
 
-PointGeo ProReader::xyToGeo (const PointXY& aPoint) const {
+GeoPoint ProReader::xyToGeo (const XYPoint& aPoint) const {
 	auto y = getLinesCount() - aPoint.y - 1;
-	auto res_lon =
-			getLongitude()
-					+ static_cast<float>(aPoint.x) * getLongitudeSize() / static_cast<float>(getPixelsCount() - 1);
-	float min_lat = -1, max_lat = -1;
-	if (getProjType() == eProjType::MERCATOR) {
-		min_lat = toMercatorLat(getLatitude());
-		max_lat = toMercatorLat(getLatitude() + getLatitudeSize());
-	}
-	else {
-		min_lat = getLatitude();
-		max_lat = getLatitude() + getLatitudeSize();
-	}
-	auto res_lat = min_lat + y * (max_lat - min_lat) / static_cast<float>(getPixelsCount() - 1);
-	res_lat = getProjType() == eProjType::MERCATOR ? res_lat : toUnmercatorLat(res_lat);
+	auto res_lon = getLongitude()
+			+ static_cast<float>(aPoint.x) * getLongitudeSize() / static_cast<float>(getPixelsCount() - 1);
+	auto width = static_cast<float>(getPixelsCount()) / getLongitudeSize() * 360.0f / (2 * M_PI);
+	auto map_offset = width * std::log(std::tan(M_PI / 4) + (toRadian(getLatitude()) / 2));
+	auto a = (getLinesCount() + map_offset - aPoint.y - 0.52) / width;
+	auto res_lat = static_cast<float>(180 / M_PI * (2 * std::atan(std::exp(a)) - M_PI / 2));
 	return { res_lon, res_lat };
 }
 
-PointXY ProReader::geoToXY (const PointGeo& aPoint) const {
-	auto col = (aPoint.lon - getLongitude()) / getLongitudeSize() * static_cast<float>(getPixelsCount() - 1);
+XYPoint ProReader::geoToXY (const GeoPoint& aPoint) const {
+	auto col = (aPoint.lon - getLongitude()) * (static_cast<float>(getPixelsCount() - 1) / getLongitudeSize());
 	auto res_x = static_cast<int>(std::floor(col + 0.5));
-	float min_lat = -1, max_lat = -1;
-	if (getProjType() == eProjType::MERCATOR) {
-		min_lat = toMercatorLat(getLatitude());
-		max_lat = toMercatorLat(getLatitude() + getLatitudeSize());
-	}
-	else {
-		min_lat = getLatitude();
-		max_lat = getLatitude() + getLatitudeSize();
-	}
-	auto denominator = (max_lat - min_lat) / static_cast<float>(getLinesCount() - 1);
-	auto line =
-			((getProjType() == eProjType::MERCATOR ? toMercatorLat(aPoint.lat) : aPoint.lat) - min_lat) / denominator;
-	auto res_y = getLinesCount() - static_cast<int>(std::floor(line + 0.5f)) - 1;
+	auto width = static_cast<float>(getPixelsCount()) / getLongitudeSize() * 360.0f / (2 * M_PI);
+	auto map_offset = width * std::log(std::tan(M_PI / 4) + (toRadian(getLatitude()) / 2));
+	auto log = std::log(std::tan(M_PI / 4) + toRadian(aPoint.lat) / 2);
+	auto estimated = getLinesCount() - (width * log - map_offset) - 0.5;
+	auto res_y = static_cast<int>(std::floor(estimated + 0.5));
 	return { res_x, res_y };
 }
 
 float ProReader::toMercatorLat (const float aLat) {
 	auto lat = aLat * std::atan2(1.f, 1.f) / 90.f;
 	lat = std::log(std::tan(0.5f * lat + std::atan2(1.f, 1.f)));
-	lat = 90.f * lat / std::atan2(1, 1);
+	lat = 90.f * lat / std::atan2(1.f, 1.f);
 	return lat;
 }
 
@@ -124,6 +110,11 @@ float ProReader::toDegree (float aAngle) {
 	return aAngle * 180 / M_PI;
 }
 
-uint16_t ProReader::getBrightness (const PointXY& aPoint) const {
-	return pixelsBrightness[aPoint.x + (getPixelsCount() * (getLinesCount() - aPoint.y - 1))];
+uint16_t ProReader::getBrightness (const XYPoint& aPoint) const {
+	return pixelsBrightness[aPoint.x + getPixelsCount() * (getLinesCount() - aPoint.y - 1)];
 }
+
+float ProReader::getCelsius (const int brightness) const {
+	return m_pass.coefficientA * brightness + m_pass.coefficientB;
+}
+

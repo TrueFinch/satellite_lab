@@ -13,34 +13,77 @@
 #include "../lib/argparse.hpp"
 
 namespace slicer {
-
-	struct PointXY {
+	static double EarthRadius = 6371.21;
+	struct XYPoint {
+		XYPoint (int aX, int aY)
+				:x{ aX }, y{ aY } {
+		}
 		int x, y;
 	};
-	struct PointGeo {
-		float lon, lat;
+
+	struct GeoPoint {
+		GeoPoint (float aLon, float aLat, bool aRadian = false)
+				:lon{ aLon }, lat{ aLat }, isRadian{ aRadian } {
+		}
+		double lon, lat;
+		bool isRadian;
+
+		void toRadian () {
+			if (isRadian) {
+				return;
+			}
+			lon = degreeToRadian(lon);
+			lat = degreeToRadian(lat);
+			isRadian = !isRadian;
+		}
+
+		void toDegree () {
+			if (!isRadian) {
+				return;
+			}
+			lon = radianToDegree(lon);
+			lat = radianToDegree(lat);
+			isRadian = !isRadian;
+		}
+		static double degreeToRadian (double x) {
+			return x * M_PI / 180;
+		}
+
+		static double radianToDegree (double x) {
+			return x / M_PI * 180;
+		}
 	};
 
-	static float getDistance (const PointXY& aStart, const PointXY& aFinish) {
-		return std::max(std::fabs(aStart.x - aFinish.x), std::fabs(aStart.y - aFinish.y));
+	int getDistance (const XYPoint& aStart, const XYPoint& aFinish) {
+		return std::max(std::abs(aStart.x - aFinish.x), std::abs(aStart.y - aFinish.y));
 	}
 
-	static int lerp (int start, int finish, const float t) {
+	double getDistance (GeoPoint aStart, GeoPoint aFinish) {
+		aStart.toRadian();
+		aFinish.toRadian();
+		auto d = std::acos(
+				std::sin(aStart.lat) * std::sin(aFinish.lat)
+				+ std::cos(aStart.lat) * std::cos(aFinish.lat) * std::cos(aStart.lon - aFinish.lon)
+				);
+		return  d * EarthRadius;
+	}
+
+	int lerp (int start, int finish, const float t) {
 		return static_cast<int>(std::round(start + t * (finish - start)));
 	}
 
-	static PointXY lerpPoint (const PointXY& aStart, const PointXY& aFinish, const float t) {
+	XYPoint lerpPoint (const XYPoint& aStart, const XYPoint& aFinish, const float t) {
 		return { lerp(aStart.x, aFinish.x, t), lerp(aStart.y, aFinish.y, t) };
 
 	}
 
-	static std::vector<PointXY> getPoints (const PointXY& aStart, const PointXY& aFinish) {
-		std::vector<PointXY> res;
+	std::vector<XYPoint> getPoints (const XYPoint& aStart, const XYPoint& aFinish) {
+		std::vector<XYPoint> res;
 		auto n = getDistance(aStart, aFinish);
 		for (auto i = 0; i <= n; ++i) {
-			auto t = n == 0 ? 0.f : i / n;
+			auto t = n == 0 ? 0.f : 1.0f * i / n;
 			res.push_back(lerpPoint(aStart, aFinish, t));
 		}
 		return res;
 	}
-} // utils namespace
+} // slicer namespace
