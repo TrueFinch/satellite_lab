@@ -51,7 +51,6 @@ bool parse_args (int argc, char* argv[]) {
 		exit(0);
 	}
 
-
 	testFlag = argument_parser["--test"] == true;
 	if (testFlag) {
 		return true;
@@ -74,6 +73,31 @@ bool parse_args (int argc, char* argv[]) {
 	}
 
 	return true;
+}
+
+std::vector<double> getPerpendicularBrightness (const slicer::ProReader reader, const int n, slicer::GeoPoint aPoint,
+		double dlon, double dlat) {
+	std::vector<double> result;
+
+	result.push_back(reader.getBrightness(reader.geoToXY(aPoint)));
+
+	for (auto i = 1; i < n + 1; ++i) {
+		auto p1 = aPoint, p2 = aPoint;
+		p1.lon += i * dlon;
+		p1.lat -= i * dlat;
+		auto xy_point = reader.geoToXY(p1);
+		if (reader.isXYinRange(xy_point)) {
+			result.push_back(reader.getBrightness(xy_point));
+		}
+		p2.lon -= i * dlon;
+		p2.lat += i * dlat;
+		xy_point = reader.geoToXY(p2);
+		if (reader.isXYinRange(xy_point)) {
+			result.push_back(reader.getBrightness(xy_point));
+		}
+	}
+
+	return result;
 }
 
 // -geo lon lat -xy x y -test

@@ -1,7 +1,6 @@
 //
 // Created by TrueFinch on 13.03.2020.
 //
-
 #pragma once
 
 #include <vector>
@@ -54,30 +53,30 @@ namespace slicer {
 		}
 	};
 
-	int getDistance (const XYPoint& aStart, const XYPoint& aFinish) {
+	static int getDistance (const XYPoint& aStart, const XYPoint& aFinish) {
 		return std::max(std::abs(aStart.x - aFinish.x), std::abs(aStart.y - aFinish.y));
 	}
 
-	double getDistance (GeoPoint aStart, GeoPoint aFinish) {
+	static double getGeoDistance (GeoPoint aStart, GeoPoint aFinish) {
 		aStart.toRadian();
 		aFinish.toRadian();
-		auto d = std::acos(
-				std::sin(aStart.lat) * std::sin(aFinish.lat)
-				+ std::cos(aStart.lat) * std::cos(aFinish.lat) * std::cos(aStart.lon - aFinish.lon)
-				);
-		return  d * EarthRadius;
+		auto sin1 = std::sin((aStart.lat - aFinish.lat) / 2);
+		auto sin2 = std::sin((aStart.lon - aFinish.lon) / 2);
+		auto a = sin1 * sin1 + sin2 * sin2 * std::cos(aStart.lat) * std::cos(aFinish.lat);
+		auto c = 2 * std::atan2(std::sqrt(a), sqrt(1 - a));
+		return c * EarthRadius;
 	}
 
-	int lerp (int start, int finish, const float t) {
+	static int lerp (int start, int finish, const float t) {
 		return static_cast<int>(std::round(start + t * (finish - start)));
 	}
 
-	XYPoint lerpPoint (const XYPoint& aStart, const XYPoint& aFinish, const float t) {
+	static XYPoint lerpPoint (const XYPoint& aStart, const XYPoint& aFinish, const float t) {
 		return { lerp(aStart.x, aFinish.x, t), lerp(aStart.y, aFinish.y, t) };
 
 	}
 
-	std::vector<XYPoint> getPoints (const XYPoint& aStart, const XYPoint& aFinish) {
+	static std::vector<XYPoint> getPoints (const XYPoint& aStart, const XYPoint& aFinish) {
 		std::vector<XYPoint> res;
 		auto n = getDistance(aStart, aFinish);
 		for (auto i = 0; i <= n; ++i) {
@@ -85,5 +84,9 @@ namespace slicer {
 			res.push_back(lerpPoint(aStart, aFinish, t));
 		}
 		return res;
+	}
+
+	static double findMean (std::vector<double>) {
+
 	}
 } // slicer namespace

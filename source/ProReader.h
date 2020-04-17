@@ -97,7 +97,9 @@ namespace slicer {
 		float getLongitudeStep () const {
 			return m_pass.longitudeStep;
 		}
-
+		bool isXYinRange(XYPoint aPoint) const {
+			return aPoint.x >= 0 && aPoint.x < getPixelsCount() && aPoint.y >= 0 && aPoint.y < getLinesCount();
+		}
 		static float toRadian (float aAngle);
 		static float toDegree (float aAngle);
 	private:
